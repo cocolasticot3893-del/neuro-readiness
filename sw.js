@@ -1,9 +1,10 @@
-const CACHE_NAME = 'neuro-cache-v4';
+const CACHE_NAME = 'neuro-cache-v5';
 const ASSETS = [
   './',
   './index.html',
   './poker.html',
-  './manifest.json'
+  './manifest.json',
+  './manifest_poker.json'
 ];
 
 self.addEventListener('install', (e) => {
