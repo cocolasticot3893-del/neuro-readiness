@@ -1,7 +1,7 @@
 {
   "name": "NeuroReadiness 90s",
   "short_name": "Neuro90s",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#000000",

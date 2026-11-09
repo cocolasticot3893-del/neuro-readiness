@@ -1,5 +1,6 @@
-const CACHE_NAME = 'neuro-cache-v3';
+const CACHE_NAME = 'neuro-cache-v4';
 const ASSETS = [
+  './',
   './index.html',
   './poker.html',
   './manifest.json'
