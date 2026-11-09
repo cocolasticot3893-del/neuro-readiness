@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#030712">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Poker Readiness 90s — Anti-Tilt Check</title>
+
+  <link rel="manifest" href="manifest.json">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
+  </script>
+
+  <style>
+    :root {
+      --bg: #030712;
+      --card: #0b1329;
+      --border: #1e293b;
+      --text: #f8fafc;
+      --muted: #64748b;
+      --accent: #38bdf8;       /* Cyan table / Poker focus */
+      --accent-glow: #0284c7;
+      --warn: #fbbf24;
+      --danger: #ef4444;       /* Alerte Tilt */
+      --success: #10b981;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: manipulation;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-family: monospace;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .badge-ok { background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-warn { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid var(--danger); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    .icon-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+      overflow-y: auto;
+      position: relative;
+    }
+    .screen { display: none; flex-direction: column; height: 100%; justify-content: space-between; }
+    .screen.active { display: flex; }
+
+    #hz-alert {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid var(--danger);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: none;
+    }
+    #hz-alert h4 { color: var(--danger); font-size: 14px; margin-bottom: 4px; }
+    #hz-alert p { font-size: 12px; color: var(--text); line-height: 1.4; margin-bottom: 8px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .card h3 { font-size: 15px; margin-bottom: 6px; color: var(--text); }
+    .card p { font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .metric-box {
+      background: #030712;
+      border: 1px solid var(--border);
+      padding: 10px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .metric-val { font-size: 20px; font-weight: 700; font-family: monospace; color: var(--accent); }
+    .metric-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .btn-primary {
+      width: 100%;
+      padding: 18px;
+      border-radius: 12px;
+      border: none;
+      background: var(--accent);
+      color: #030712;
+      font-size: 16px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+    }
+    .btn-primary:disabled {
+      background: #1e293b;
+      color: #475569;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 8px;
+      cursor: pointer;
+    }
+
+    #test-progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      margin-bottom: 10px;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #test-progress-fill { height: 100%; width: 0%; background: var(--accent); }
+    #test-header-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      font-family: monospace;
+      margin-bottom: 8px;
+    }
+    #stimulus-zone {
+      flex: 1;
+      background: #020617;
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      touch-action: none;
+    }
+    #pvt-counter {
+      font-size: 64px;
+      font-weight: 800;
+      font-family: monospace;
+      color: var(--warn);
+      letter-spacing: -1px;
+    }
+    #stroop-word {
+      font-size: 54px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      display: none;
+    }
+    #feedback-msg {
+      position: absolute;
+      bottom: 24px;
+      font-size: 15px;
+      font-family: monospace;
+      font-weight: 700;
+    }
+
+    #stroop-pad {
+      display: none;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+      height: 170px;
+    }
+    .stroop-btn {
+      background: #0f172a;
+      border: 2px solid #334155;
+      border-radius: 14px;
+      color: #f8fafc;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+    .stroop-btn:active {
+      background: #1e293b;
+      border-color: var(--text);
+    }
+
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .form-group input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #020617;
+      color: var(--text);
+      font-family: monospace;
+      font-size: 13px;
+    }
+    .status-log {
+      font-family: monospace;
+      font-size: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #020617;
+      border: 1px solid var(--border);
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    .decision-banner {
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 800;
+      font-size: 14px;
+      margin-top: 10px;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <span id="hz-badge" class="badge badge-warn">CALIBRATION Hz...</span>
+      <span id="frame-time" style="color:var(--muted); margin-left:6px; font-family:monospace;">-- ms</span>
+    </div>
+    <button class="icon-btn" id="btn-settings" onclick="toggleScreen('screen-settings')">⚙️ Config Poker</button>
+  </header>
+
+  <main>
+    <!-- ACCUEIL POKER CHECKPOINT -->
+    <div id="screen-home" class="screen active">
+      <div>
+        <div id="hz-alert">
+          <h4>⚠️ ÉCRAN BRIDÉ À 60 Hz</h4>
+          <p>Le mode Économie bride l'écran à 60 Hz. Passe en 90/120 Hz pour éliminer le lag matériel.</p>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-secondary" style="margin-top:0; border-color:var(--accent); color:var(--accent);" onclick="triggerMacroDroid('on')">⚡ Forcer 90/120Hz via MacroDroid</button>
+            <button class="btn-secondary" style="margin-top:0;" onclick="bypassHzLock()">Ignorer (60Hz)</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Anti-Tilt Gatekeeper (Pré-Session Poker)</h3>
+          <p>Test d'inhibition exécutive (ACC). Objectif : vérifier que ton frein métabolique est opérationnel avant d'engager de la bankroll sur les tables.</p>
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <div class="metric-val" id="home-base-ies">-- ms</div>
+              <div class="metric-lbl">Baseline Stroop (Soir)</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val" id="home-base-pvt">-- ms</div>
+              <div class="metric-lbl">Baseline PVT (Soir)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Matrice Décisionnelle ChipEV</h3>
+          <p>• <b>Z-Score ≥ -0.5 :</b> Voyant Vert $\rightarrow$ Focus optimal, multi-tabling standard.<br>
+             • <b>-1.2 ≤ Z < -0.5 :</b> Voyant Jaune $\rightarrow$ Réduire le nombre de tables, jeu ABC strict.<br>
+             • <b>Z < -1.2 :</b> Voyant Rouge $\rightarrow$ <b>STOP SESSION</b> (Inhibition compromise = EV négative garantie).</p>
+        </div>
+      </div>
+
+      <div>
+        <button id="btn-start" class="btn-primary" disabled onclick="startPokerProtocol()">Attente Calibrage Dalle...</button>
+      </div>
+    </div>
+
+    <!-- ZONE DE TEST HAUTE PRÉCISION -->
+    <div id="screen-test" class="screen">
+      <div>
+        <div id="test-progress-bar"><div id="test-progress-fill"></div></div>
+        <div id="test-header-info">
+          <span id="phase-title">PHASE 1/2 : NASA PVT-B (60s)</span>
+          <span id="trial-counter">Essai #0</span>
+        </div>
+      </div>
+
+      <div id="stimulus-zone">
+        <div id="pvt-counter">PRÊT</div>
+        <div id="stroop-word">ROUGE</div>
+        <div id="feedback-msg"></div>
+      </div>
+
+      <div id="stroop-pad">
+        <div class="stroop-btn" data-idx="0"></div>
+        <div class="stroop-btn" data-idx="1"></div>
+        <div class="stroop-btn" data-idx="2"></div>
+        <div class="stroop-btn" data-idx="3"></div>
+      </div>
+    </div>
+
+    <!-- BILAN POKER READINESS -->
+    <div id="screen-results" class="screen">
+      <div style="overflow-y:auto;">
+        <div class="card">
+          <h3>Diagnostic de Vigilance & Risque de Tilt</h3>
+          
+          <div id="decision-banner" class="decision-banner">CALCUL EN COURS...</div>
+
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <div class="metric-val" id="res-zscore">--</div>
+              <div class="metric-lbl">Z-Score Exécutif</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val" id="res-stroop-ies">-- ms</div>
+              <div class="metric-lbl">Stroop IES (ACC)</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val" id="res-pvt-med">-- ms</div>
+              <div class="metric-lbl">PVT-B Médian</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val" id="res-lapses">--</div>
+              <div class="metric-lbl">Lapses (>355ms) / Faux</div>
+            </div>
+          </div>
+
+          <div id="sync-log" class="status-log">Envoi vers Intervals.icu en cours...</div>
+        </div>
+      </div>
+
+      <div>
+        <button class="btn-primary" onclick="pushToIntervals()">🔄 Renvoyer vers Intervals.icu</button>
+        <button class="btn-secondary" onclick="exportHistoryCSV()">📥 Exporter Historique Poker (CSV)</button>
+        <button class="btn-secondary" onclick="toggleScreen('screen-home')">Retour</button>
+      </div>
+    </div>
+
+    <!-- CONFIGURATION SPÉCIFIQUE POKER -->
+    <div id="screen-settings" class="screen">
+      <div style="overflow-y:auto;">
+        <div class="card">
+          <h3>API Intervals.icu (Champs Poker Isolés)</h3>
+          <div class="form-group">
+            <label>Athlete ID (ex: i123456)</label>
+            <input type="text" id="cfg-athlete" placeholder="i123456">
+          </div>
+          <div class="form-group">
+            <label>Clé API</label>
+            <input type="password" id="cfg-apikey" placeholder="Clé API">
+          </div>
+          <div class="form-group">
+            <label>Champs Custom Wellness (PVT, Lapses, StroopIES, ZScore)</label>
+            <input type="text" id="cfg-fields" value="PokerPvtMedian,PokerLapses,PokerIES,PokerZ">
+          </div>
+          <div class="form-group">
+            <label>Rapport automatique dans Comments Wellness (oui/non)</label>
+            <input type="text" id="cfg-comment" value="oui">
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Webhooks MacroDroid & Durées</h3>
+          <div class="form-group">
+            <label>Webhook Ouverture (Désactive Éco)</label>
+            <input type="text" id="cfg-macro-on" value="http://127.0.0.1:8765/perf_on">
+          </div>
+          <div class="form-group">
+            <label>Webhook Fermeture (Réactive Éco)</label>
+            <input type="text" id="cfg-macro-off" value="http://127.0.0.1:8765/perf_off">
+          </div>
+          <div class="form-group">
+            <label>Durées PVT (s) / Stroop (s)</label>
+            <input type="text" id="cfg-durations" value="60,30">
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <button class="btn-primary" onclick="saveSettings()">Enregistrer</button>
+        <button class="btn-secondary" onclick="toggleScreen('screen-home')">Fermer</button>
+      </div>
+    </div>
+  </main>
+
+<script>
+/**
+ * POKER ANTI-TILT READINESS PWA (BASE ISOLEE)
+ */
+let detectedHz = 60;
+let manualHzBypass = false;
+let wakeLock = null;
+
+function runDisplayHzProbe() {
+  let frames = 0;
+  let startTime = performance.now();
+
+  function sampleFrame(now) {
+    frames++;
+    if (frames <= 45) {
+      requestAnimationFrame(sampleFrame);
+    } else {
+      const avgFrameMs = (now - startTime) / frames;
+      detectedHz = Math.round(1000 / avgFrameMs);
+      updateHzStatusUI(detectedHz, avgFrameMs);
+      if (document.getElementById('screen-home').classList.contains('active')) {
+        setTimeout(runDisplayHzProbe, 2500);
+      }
+    }
+  }
+  requestAnimationFrame(sampleFrame);
+}
+
+function updateHzStatusUI(hz, frameMs) {
+  const badge = document.getElementById('hz-badge');
+  const ft = document.getElementById('frame-time');
+  const alertBox = document.getElementById('hz-alert');
+  const startBtn = document.getElementById('btn-start');
+
+  ft.textContent = frameMs.toFixed(1) + ' ms/frame';
+
+  if (hz >= 75 || manualHzBypass) {
+    badge.className = 'badge badge-ok';
+    badge.textContent = hz >= 75 ? `⚡ ${hz} Hz LOCKED` : `⚠️ ${hz} Hz (FORCE)`;
+    alertBox.style.display = 'none';
+    startBtn.disabled = false;
+    startBtn.textContent = 'LANCER LE CHECK POKER (90s)';
+  } else {
+    badge.className = 'badge badge-warn';
+    badge.textContent = `⚠️ ${hz} Hz (BRIDÉ ÉCO)`;
+    alertBox.style.display = 'block';
+    startBtn.disabled = true;
+    startBtn.textContent = 'DÉSACTIVER MODE ÉCO POUR TESTER';
+  }
+}
+
+function bypassHzLock() {
+  manualHzBypass = true;
+  updateHzStatusUI(detectedHz, 1000 / detectedHz);
+}
+
+async function triggerMacroDroid(mode) {
+  const cfg = getSettings();
+  const url = mode === 'on' ? cfg.macroOn : cfg.macroOff;
+  if (!url) return;
+  try {
+    await fetch(url, { mode: 'no-cors', cache: 'no-store' });
+    if (mode === 'on') setTimeout(runDisplayHzProbe, 600);
+  } catch (e) {}
+}
+
+const COLORS = [
+  { name: 'ROUGE', hex: '#ef4444' },
+  { name: 'BLEU',  hex: '#38bdf8' },
+  { name: 'VERT',  hex: '#10b981' },
+  { name: 'JAUNE', hex: '#fbbf24' }
+];
+
+let protocolState = 'IDLE';
+let phaseStartTime = 0;
+let stimTimestamp = 0;
+let pvtTimerId = null;
+let animCounterId = null;
+
+let pvtRTs = [];
+let pvtLapses = 0;
+let pvtFalseStarts = 0;
+
+let stroopRTs = [];
+let stroopErrors = 0;
+let stroopTotal = 0;
+let currentStroopTarget = null;
+let currentButtonMapping = [];
+
+function getDurations() {
+  const raw = (getSettings().durations || '60,30').split(',');
+  return {
+    pvtMs: (parseInt(raw[0], 10) || 60) * 1000,
+    stroopMs: (parseInt(raw[1], 10) || 30) * 1000
+  };
+}
+
+function startPokerProtocol() {
+  if ('wakeLock' in navigator) navigator.wakeLock.request('screen').then(wl => wakeLock = wl).catch(()=>{});
+  toggleScreen('screen-test');
+
+  pvtRTs = [];
+  pvtLapses = 0;
+  pvtFalseStarts = 0;
+  stroopRTs = [];
+  stroopErrors = 0;
+  stroopTotal = 0;
+
+  document.getElementById('stroop-pad').style.display = 'none';
+  document.getElementById('stroop-word').style.display = 'none';
+  document.getElementById('pvt-counter').style.display = 'block';
+  document.getElementById('phase-title').textContent = 'PHASE 1/2 : NASA PVT-B (VIGILANCE BRUTE)';
+
+  phaseStartTime = performance.now();
+  scheduleNextPvtTrial();
+}
+
+function scheduleNextPvtTrial() {
+  const { pvtMs } = getDurations();
+  const elapsed = performance.now() - phaseStartTime;
+
+  if (elapsed >= pvtMs) {
+    transitionToStroopPhase();
+    return;
+  }
+
+  document.getElementById('test-progress-fill').style.width = `${Math.min(100, (elapsed / pvtMs) * 50)}%`;
+  document.getElementById('trial-counter').textContent = `Valides: ${pvtRTs.length}`;
+
+  protocolState = 'PVT_WAIT';
+  const counterEl = document.getElementById('pvt-counter');
+  counterEl.textContent = '+';
+  counterEl.style.color = '#334155';
+  document.getElementById('feedback-msg').textContent = '';
+
+  const isi = 1500 + Math.random() * 2000;
+  pvtTimerId = setTimeout(() => {
+    requestAnimationFrame((frameTime) => {
+      if (protocolState !== 'PVT_WAIT') return;
+      protocolState = 'PVT_STIM';
+      stimTimestamp = frameTime;
+      counterEl.style.color = '#fbbf24';
+      updatePvtLiveCounter();
+    });
+  }, isi);
+}
+
+function updatePvtLiveCounter() {
+  if (protocolState !== 'PVT_STIM') return;
+  const elapsed = Math.round(performance.now() - stimTimestamp);
+  document.getElementById('pvt-counter').textContent = elapsed;
+  animCounterId = requestAnimationFrame(updatePvtLiveCounter);
+}
+
+document.getElementById('stimulus-zone').addEventListener('pointerdown', (ev) => {
+  ev.preventDefault();
+  const tapTime = performance.now();
+
+  if (protocolState === 'PVT_WAIT') {
+    clearTimeout(pvtTimerId);
+    pvtFalseStarts++;
+    showFeedback('IMPULSIVITÉ !', '#ef4444');
+    protocolState = 'PVT_LOCK';
+    setTimeout(scheduleNextPvtTrial, 700);
+  } else if (protocolState === 'PVT_STIM') {
+    cancelAnimationFrame(animCounterId);
+    const rt = tapTime - stimTimestamp;
+    protocolState = 'PVT_LOCK';
+
+    if (rt < 100) {
+      pvtFalseStarts++;
+      showFeedback(`ANTICIPATION (${Math.round(rt)} ms)`, '#ef4444');
+    } else {
+      pvtRTs.push(rt);
+      if (rt > 355) {
+        pvtLapses++;
+        showFeedback(`${Math.round(rt)} ms (LAPSE)`, '#fbbf24');
+      } else {
+        showFeedback(`${Math.round(rt)} ms`, '#38bdf8');
+      }
+    }
+    document.getElementById('pvt-counter').textContent = Math.round(rt);
+    setTimeout(scheduleNextPvtTrial, 450);
+  }
+}, { passive: false });
+
+function showFeedback(text, color) {
+  const fb = document.getElementById('feedback-msg');
+  fb.textContent = text;
+  fb.style.color = color;
+}
+
+function transitionToStroopPhase() {
+  protocolState = 'TRANSITION';
+  document.getElementById('phase-title').textContent = 'PHASE 2/2 : TEST ACC (CONTRÔLE D\'INHIBITION)';
+  const counterEl = document.getElementById('pvt-counter');
+  counterEl.style.color = '#38bdf8';
+  counterEl.style.fontSize = '22px';
+  counterEl.textContent = 'CONFLIT DANS 2s : CLIQUE LA COULEUR DE L\'ENCRE';
+  showFeedback('', '#fff');
+
+  setTimeout(() => {
+    counterEl.style.display = 'none';
+    counterEl.style.fontSize = '64px';
+    document.getElementById('stroop-word').style.display = 'block';
+    document.getElementById('stroop-pad').style.display = 'grid';
+    phaseStartTime = performance.now();
+    nextStroopTrial();
+  }, 2200);
+}
+
+function shuffleArray(arr) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function nextStroopTrial() {
+  const { stroopMs } = getDurations();
+  const elapsed = performance.now() - phaseStartTime;
+
+  if (elapsed >= stroopMs) {
+    finishPokerProtocol();
+    return;
+  }
+
+  document.getElementById('test-progress-fill').style.width = `${50 + Math.min(50, (elapsed / stroopMs) * 50)}%`;
+  document.getElementById('trial-counter').textContent = `Essais: ${stroopTotal}`;
+
+  const inkColor = COLORS[Math.floor(Math.random() * COLORS.length)];
+  const otherWords = COLORS.filter(c => c.name !== inkColor.name);
+  const wordText = otherWords[Math.floor(Math.random() * otherWords.length)];
+
+  currentStroopTarget = inkColor.name;
+  currentButtonMapping = shuffleArray(COLORS);
+  
+  const buttons = document.querySelectorAll('.stroop-btn');
+  buttons.forEach((btn, idx) => {
+    btn.textContent = currentButtonMapping[idx].name;
+  });
+
+  const wordEl = document.getElementById('stroop-word');
+  wordEl.style.visibility = 'hidden';
+
+  setTimeout(() => {
+    requestAnimationFrame((frameTime) => {
+      wordEl.textContent = wordText.name;
+      wordEl.style.color = inkColor.hex;
+      wordEl.style.visibility = 'visible';
+      stimTimestamp = frameTime;
+      protocolState = 'STROOP_ACTIVE';
+    });
+  }, 140);
+}
+
+document.querySelectorAll('.stroop-btn').forEach(btn => {
+  btn.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    if (protocolState !== 'STROOP_ACTIVE') return;
+    const tapTime = performance.now();
+    protocolState = 'STROOP_LOCK';
+
+    const rt = tapTime - stimTimestamp;
+    const idx = parseInt(btn.getAttribute('data-idx'), 10);
+    const chosenName = currentButtonMapping[idx].name;
+
+    stroopTotal++;
+    if (chosenName === currentStroopTarget && rt >= 120) {
+      stroopRTs.push(rt);
+      showFeedback(`${Math.round(rt)} ms`, '#38bdf8');
+    } else {
+      stroopErrors++;
+      showFeedback('ERREUR TILT/CONFLIT', '#ef4444');
+    }
+    nextStroopTrial();
+  }, { passive: false });
+});
+
+function computeMedian(arr) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a,b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 !== 0 ? s[m] : (s[m-1] + s[m]) / 2;
+}
+
+let lastPokerMetrics = null;
+
+function finishPokerProtocol() {
+  protocolState = 'DONE';
+  if (wakeLock) { wakeLock.release().catch(()=>{}); wakeLock = null; }
+
+  const pvtMedian = Math.round(computeMedian(pvtRTs));
+  const pvtSpeed = pvtRTs.length ? Number((pvtRTs.reduce((acc, r) => acc + (1000 / r), 0) / pvtRTs.length).toFixed(2)) : 0;
+
+  const stroopMeanCorrect = stroopRTs.length ? (stroopRTs.reduce((a,b)=>a+b, 0) / stroopRTs.length) : 0;
+  const errorRate = stroopTotal > 0 ? (stroopErrors / stroopTotal) : 0;
+  const safeErrorRate = Math.min(errorRate, 0.75);
+  const stroopIES = stroopRTs.length ? Math.round(stroopMeanCorrect / (1 - safeErrorRate)) : 0;
+
+  // Calcul du Z-Score basé exclusivement sur l'historique POKER (soir)
+  const history = getPokerHistory();
+  const recent = history.slice(-28);
+
+  let zScore = 0;
+  if (recent.length >= 3) {
+    const iesList = recent.map(h => h.stroopIES);
+    const speeds = recent.map(h => h.pvtSpeed);
+
+    const meanIES = iesList.reduce((a,b)=>a+b,0) / iesList.length;
+    const sdIES = Math.sqrt(iesList.reduce((a,b)=>a + Math.pow(b - meanIES, 2), 0) / iesList.length) || 35;
+
+    const meanSpeed = speeds.reduce((a,b)=>a+b,0) / speeds.length;
+    const sdSpeed = Math.sqrt(speeds.reduce((a,b)=>a + Math.pow(b - meanSpeed, 2), 0) / speeds.length) || 0.15;
+
+    // Pondération orientée Poker : 70% Contrôle d'inhibition (Stroop) / 30% Vitesse brute (PVT)
+    const zStroop = (meanIES - stroopIES) / sdIES;
+    const zPvt = (pvtSpeed - meanSpeed) / sdSpeed;
+    zScore = Number(((0.7 * zStroop) + (0.3 * zPvt)).toFixed(2));
+  }
+
+  lastPokerMetrics = {
+    date: new Date().toLocaleDateString('sv-SE'),
+    timestamp: new Date().toISOString(),
+    hz: detectedHz,
+    pvtMedian,
+    pvtSpeed,
+    pvtLapses,
+    pvtFalseStarts,
+    stroopIES,
+    stroopErrors,
+    stroopTotal,
+    zScore
+  };
+
+  saveToPokerHistory(lastPokerMetrics);
+
+  // Bannière Décisionnelle Poker
+  const banner = document.getElementById('decision-banner');
+  if (zScore >= -0.5) {
+    banner.style.background = 'rgba(16, 185, 129, 0.2)';
+    banner.style.color = '#10b981';
+    banner.style.border = '1px solid #10b981';
+    banner.textContent = '🟢 FOCUS OPTIMAL : MULTI-TABLING AUTORISÉ (EV+)';
+  } else if (zScore >= -1.2) {
+    banner.style.background = 'rgba(251, 191, 36, 0.2)';
+    banner.style.color = '#fbbf24';
+    banner.style.border = '1px solid #fbbf24';
+    banner.textContent = '🟡 FATIGUE MODÉRÉE : RÉDUIRE LE NOMBRE DE TABLES (JEU ABC)';
+  } else {
+    banner.style.background = 'rgba(239, 68, 68, 0.25)';
+    banner.style.color = '#ef4444';
+    banner.style.border = '1px solid #ef4444';
+    banner.textContent = '🔴 ALERTE TILT / ÉPUISEMENT ACC : NE PAS JOUER CE SOIR';
+  }
+
+  document.getElementById('res-zscore').textContent = (zScore >= 0 ? '+' : '') + zScore;
+  document.getElementById('res-stroop-ies').textContent = `${stroopIES} ms`;
+  document.getElementById('res-pvt-med').textContent = `${pvtMedian} ms`;
+  document.getElementById('res-lapses').textContent = `${pvtLapses} / ${pvtFalseStarts}`;
+
+  toggleScreen('screen-results');
+  refreshPokerHomeBaselines();
+
+  pushToIntervals().finally(() => {
+    triggerMacroDroid('off');
+  });
+}
+
+// Persistance isolée
+function getSettings() {
+  try { return JSON.parse(localStorage.getItem('poker_cfg') || '{}'); } catch(e) { return {}; }
+}
+function saveSettings() {
+  const cfg = {
+    athlete: document.getElementById('cfg-athlete').value.trim(),
+    apikey: document.getElementById('cfg-apikey').value.trim(),
+    fields: document.getElementById('cfg-fields').value.trim(),
+    comment: document.getElementById('cfg-comment').value.trim(),
+    macroOn: document.getElementById('cfg-macro-on').value.trim(),
+    macroOff: document.getElementById('cfg-macro-off').value.trim(),
+    durations: document.getElementById('cfg-durations').value.trim()
+  };
+  localStorage.setItem('poker_cfg', JSON.stringify(cfg));
+  toggleScreen('screen-home');
+}
+function loadSettings() {
+  const cfg = getSettings();
+  if (cfg.athlete) document.getElementById('cfg-athlete').value = cfg.athlete;
+  if (cfg.apikey) document.getElementById('cfg-apikey').value = cfg.apikey;
+  if (cfg.fields) document.getElementById('cfg-fields').value = cfg.fields;
+  if (cfg.comment) document.getElementById('cfg-comment').value = cfg.comment;
+  if (cfg.macroOn) document.getElementById('cfg-macro-on').value = cfg.macroOn;
+  if (cfg.macroOff) document.getElementById('cfg-macro-off').value = cfg.macroOff;
+  if (cfg.durations) document.getElementById('cfg-durations').value = cfg.durations;
+}
+function getPokerHistory() {
+  try { return JSON.parse(localStorage.getItem('poker_history') || '[]'); } catch(e) { return []; }
+}
+function saveToPokerHistory(entry) {
+  const hist = getPokerHistory().filter(h => h.timestamp.split('T')[0] !== entry.timestamp.split('T')[0]);
+  hist.push(entry);
+  localStorage.setItem('poker_history', JSON.stringify(hist));
+}
+function refreshPokerHomeBaselines() {
+  const recent = getPokerHistory().slice(-28);
+  if (!recent.length) return;
+  const avgIes = Math.round(recent.reduce((a,b)=>a+b.stroopIES,0)/recent.length);
+  const avgPvt = Math.round(recent.reduce((a,b)=>a+b.pvtMedian,0)/recent.length);
+  document.getElementById('home-base-ies').textContent = `${avgIes} ms`;
+  document.getElementById('home-base-pvt').textContent = `${avgPvt} ms`;
+}
+
+async function pushToIntervals() {
+  const log = document.getElementById('sync-log');
+  const cfg = getSettings();
+  if (!cfg.athlete || !cfg.apikey || !lastPokerMetrics) {
+    log.textContent = "Mode local uniquement (API non configurée).";
+    return;
+  }
+  log.textContent = `⏳ Envoi Poker vers Intervals.icu (${lastPokerMetrics.date})...`;
+  const f = (cfg.fields || 'PokerPvtMedian,PokerLapses,PokerIES,PokerZ').split(',').map(s=>s.trim());
+  const payload = {};
+  if (f[0]) payload[f[0]] = lastPokerMetrics.pvtMedian;
+  if (f[1]) payload[f[1]] = lastPokerMetrics.pvtLapses;
+  if (f[2]) payload[f[2]] = lastPokerMetrics.stroopIES;
+  if (f[3]) payload[f[3]] = lastPokerMetrics.zScore;
+
+  if ((cfg.comment || '').toLowerCase() === 'oui') {
+    payload.comments = `[Poker ${lastPokerMetrics.hz}Hz] Stroop IES: ${lastPokerMetrics.stroopIES}ms | PVT: ${lastPokerMetrics.pvtMedian}ms | Z-Tilt: ${lastPokerMetrics.zScore}`;
+  }
+
+  try {
+    const res = await fetch(`https://intervals.icu/api/v1/athlete/${cfg.athlete}/wellness/${lastPokerMetrics.date}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'Basic ' + btoa(`API_KEY:${cfg.apikey}`),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      log.style.color = '#38bdf8';
+      log.textContent = `✅ Synchronisé avec succès sur Intervals.icu (${lastPokerMetrics.date}) !`;
+    } else {
+      log.style.color = '#ef4444';
+      log.textContent = `❌ Erreur (${res.status}) : ` + (await res.text());
+    }
+  } catch(e) {
+    log.style.color = '#ef4444';
+    log.textContent = `❌ Erreur réseau : ${e.message}`;
+  }
+}
+
+function exportHistoryCSV() {
+  const hist = getPokerHistory();
+  if (!hist.length) return;
+  const headers = ['timestamp','date','hz','pvtMedian','pvtSpeed','pvtLapses','pvtFalseStarts','stroopIES','stroopErrors','stroopTotal','zScore'];
+  const rows = hist.map(h => headers.map(k => h[k]).join(','));
+  const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `poker_readiness_${new Date().toLocaleDateString('sv-SE')}.csv`;
+  a.click();
+}
+
+function toggleScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'screen-home') runDisplayHzProbe();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadSettings();
+  refreshPokerHomeBaselines();
+  triggerMacroDroid('on');
+  runDisplayHzProbe();
+});
+</script>
+</body>
+</html>
