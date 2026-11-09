@@ -1,7 +1,9 @@
 {
+  "id": "neuro-poker-90s",
   "name": "Poker Readiness 90s",
   "short_name": "Poker90s",
   "start_url": "./poker.html",
+  "scope": "./poker.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#030712",

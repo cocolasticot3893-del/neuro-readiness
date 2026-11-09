@@ -1,7 +1,9 @@
 {
+  "id": "neuro-matin-90s",
   "name": "NeuroReadiness 90s",
   "short_name": "Neuro90s",
-  "start_url": "./",
+  "start_url": "./index.html",
+  "scope": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#000000",
