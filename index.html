@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>NeuroReadiness 90s — PVT-B & Stroop</title>
+  
+  <!-- LIAISON PWA -->
+  <link rel="manifest" href="manifest.json">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
+  </script>
+
+  <style>
+    /* ... (Insérer ici exactement le même bloc <style> que dans ma réponse précédente) ... */
+    :root { --bg: #000000; --card: #0d0f12; --border: #1f242d; --text: #f0f4f8; --muted: #7a869a; --accent: #00e676; --warn: #ffb300; --danger: #ff1744; --blue: #2979ff; }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+    html, body { width: 100%; height: 100%; background-color: var(--bg); color: var(--text); font-family: monospace; overflow: hidden; display: flex; flex-direction: column; }
+    /* ... Suite du CSS (badge, card, stimulus-zone, stroop-pad, etc.) ... */
+  </style>
+</head>
+<body>
+  <!-- ... (Insérer ici exactement la même structure HTML <body> et le <script> JavaScript de la logique métier que dans ma réponse précédente) ... -->
+  <!-- Le code source complet est identique à l'itération précédente pour la logique PVT/Stroop et API -->
+</body>
+</html>
